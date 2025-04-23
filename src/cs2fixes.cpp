@@ -974,7 +974,7 @@ KHook::Return<void> CS2Fixes::Hook_CheckTransmit_Post(ISource2GameEntities* pThi
 								  const Entity2Networkable_t** pNetworkables, const uint16* pEntityIndicies, int nEntities, bool bEnablePVSBits)
 {
 	if (!g_pEntitySystem || !GetGlobals())
-		return;
+		return {KHook::Action::Ignore};
 
 	VPROF("CS2Fixes::Hook_CheckTransmit");
 
@@ -1126,7 +1126,7 @@ static_assert(sizeof(TouchLinked_t) == 240, "Touch_t size mismatch");
 KHook::Return<void> CS2Fixes::Hook_PhysicsTouchShuffle_Post(CVPhys2World* pThis, CUtlVector<TouchLinked_t>* pList, bool unknown)
 {
 	if (!g_cvarFixPhysicsPlayerShuffle.Get() || pList->Count() <= 1)
-		return;
+		return {KHook::Action::Ignore};
 
 	// [Kxnrl]
 	// seems it sorted by flags?
@@ -1149,7 +1149,7 @@ KHook::Return<void> CS2Fixes::Hook_PhysicsTouchShuffle_Post(CVPhys2World* pThis,
 	}
 
 	if (touchingLinks.size() <= 1)
-		return;
+		return {KHook::Action::Ignore};
 
 	for (size_t i = touchingLinks.size() - 1; i > 0; --i)
 	{
