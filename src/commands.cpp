@@ -59,45 +59,6 @@ std::map<uint32, std::shared_ptr<CChatCommand>>& CommandList()
 	return commandList;
 }
 
-int GetGrenadeAmmo(CCSPlayer_WeaponServices* pWeaponServices, const WeaponInfo_t* pWeaponInfo)
-{
-	if (!pWeaponServices || pWeaponInfo->m_eSlot != GEAR_SLOT_GRENADES)
-		return -1;
-
-	// TODO: look into molotov vs inc interaction
-	if (strcmp(pWeaponInfo->m_pClass, "weapon_hegrenade") == 0)
-		return pWeaponServices->m_iAmmo[AMMO_OFFSET_HEGRENADE];
-	if (strcmp(pWeaponInfo->m_pClass, "weapon_molotov") == 0 || strcmp(pWeaponInfo->m_pClass, "weapon_incgrenade") == 0)
-		return pWeaponServices->m_iAmmo[AMMO_OFFSET_MOLOTOV];
-	if (strcmp(pWeaponInfo->m_pClass, "weapon_decoy") == 0)
-		return pWeaponServices->m_iAmmo[AMMO_OFFSET_DECOY];
-	if (strcmp(pWeaponInfo->m_pClass, "weapon_flashbang") == 0)
-		return pWeaponServices->m_iAmmo[AMMO_OFFSET_FLASHBANG];
-	if (strcmp(pWeaponInfo->m_pClass, "weapon_smokegrenade") == 0)
-		return pWeaponServices->m_iAmmo[AMMO_OFFSET_SMOKEGRENADE];
-	return -1;
-}
-
-int GetGrenadeAmmoTotal(CCSPlayer_WeaponServices* pWeaponServices)
-{
-	if (!pWeaponServices)
-		return -1;
-
-	int grenadeAmmoOffsets[] = {
-		AMMO_OFFSET_HEGRENADE,
-		AMMO_OFFSET_FLASHBANG,
-		AMMO_OFFSET_SMOKEGRENADE,
-		AMMO_OFFSET_DECOY,
-		AMMO_OFFSET_MOLOTOV,
-	};
-
-	int totalGrenades = 0;
-	for (int i = 0; i < (sizeof(grenadeAmmoOffsets) / sizeof(int)); i++)
-		totalGrenades += pWeaponServices->m_iAmmo[grenadeAmmoOffsets[i]];
-
-	return totalGrenades;
-}
-
 void ParseWeaponCommand(const CCommand& args, CCSPlayerController* player)
 {
 	if (!g_cvarEnableWeapons.Get() || !player || !player->m_hPawn())
@@ -113,7 +74,7 @@ void ParseWeaponCommand(const CCommand& args, CCSPlayerController* player)
 
 	const auto pWeaponInfo = FindWeaponInfoByAlias(command);
 
-	if (!pWeaponInfo || pWeaponInfo->m_nPrice == 0)
+	if (!pWeaponInfo || !pWeaponInfo->m_pName)
 		return;
 
 	if (pPawn->m_iHealth() <= 0 || pPawn->m_iTeamNum != CS_TEAM_CT)
@@ -128,72 +89,6 @@ void ParseWeaponCommand(const CCommand& args, CCSPlayerController* player)
 	// it can sometimes be null when player joined on the very first round?
 	if (!pItemServices || !pWeaponServices)
 		return;
-
-	int money = player->m_pInGameMoneyServices->m_iAccount;
-
-	if (money < pWeaponInfo->m_nPrice)
-	{
-		ClientPrint(player, HUD_PRINTTALK, CHAT_PREFIX "You can't afford %s! It costs $%i, you only have $%i", pWeaponInfo->m_pName, pWeaponInfo->m_nPrice, money);
-		return;
-	}
-
-	static ConVarRefAbstract ammo_grenade_limit_default("ammo_grenade_limit_default"), ammo_grenade_limit_total("ammo_grenade_limit_total"), mp_weapons_allow_typecount("mp_weapons_allow_typecount");
-
-	int iGrenadeLimitDefault = ammo_grenade_limit_default.GetInt();
-	int iGrenadeLimitTotal = ammo_grenade_limit_total.GetInt();
-	int iWeaponLimit = mp_weapons_allow_typecount.GetInt();
-
-	if (pWeaponInfo->m_eSlot == GEAR_SLOT_GRENADES)
-	{
-		int iMatchingGrenades = GetGrenadeAmmo(pWeaponServices, pWeaponInfo);
-		int iTotalGrenades = GetGrenadeAmmoTotal(pWeaponServices);
-
-		if (iMatchingGrenades >= iGrenadeLimitDefault)
-		{
-			ClientPrint(player, HUD_PRINTTALK, CHAT_PREFIX "You cannot carry any more %ss (Max %i)", pWeaponInfo->m_pName, iGrenadeLimitDefault);
-			return;
-		}
-
-		if (iTotalGrenades >= iGrenadeLimitTotal)
-		{
-			ClientPrint(player, HUD_PRINTTALK, CHAT_PREFIX "You cannot carry any more grenades (Max %i)", iGrenadeLimitTotal);
-			return;
-		}
-	}
-
-	int maxAmount;
-
-	if (pWeaponInfo->m_nMaxAmount)
-		maxAmount = pWeaponInfo->m_nMaxAmount;
-	else if (pWeaponInfo->m_eSlot == GEAR_SLOT_GRENADES)
-		maxAmount = iGrenadeLimitDefault;
-	else
-		maxAmount = iWeaponLimit == -1 ? 9999 : iWeaponLimit;
-
-	CUtlVector<WeaponPurchaseCount_t>* weaponPurchases = pPawn->m_pActionTrackingServices->m_weaponPurchasesThisRound().m_weaponPurchases;
-	bool found = false;
-	FOR_EACH_VEC(*weaponPurchases, i)
-	{
-		WeaponPurchaseCount_t& purchase = (*weaponPurchases)[i];
-		if (purchase.m_nItemDefIndex == pWeaponInfo->m_iItemDefinitionIndex)
-		{
-			// Note ammo_grenade_limit_total is not followed here, only for checking inventory space
-			if (purchase.m_nCount >= maxAmount)
-			{
-				ClientPrint(player, HUD_PRINTTALK, CHAT_PREFIX "You cannot buy any more %s (Max %i)", pWeaponInfo->m_pName, maxAmount);
-				return;
-			}
-			purchase.m_nCount += 1;
-			found = true;
-			break;
-		}
-	}
-
-	if (!found)
-	{
-		WeaponPurchaseCount_t purchase(pPawn, pWeaponInfo->m_iItemDefinitionIndex, 1);
-		weaponPurchases->AddToTail(purchase);
-	}
 
 	if (pWeaponInfo->m_eSlot == GEAR_SLOT_RIFLE || pWeaponInfo->m_eSlot == GEAR_SLOT_PISTOL)
 	{
@@ -220,9 +115,7 @@ void ParseWeaponCommand(const CCommand& args, CCSPlayerController* player)
 	if (!pWeapon)
 		return;
 
-	player->m_pInGameMoneyServices->m_iAccount = money - pWeaponInfo->m_nPrice;
-
-	ClientPrint(player, HUD_PRINTTALK, CHAT_PREFIX "You have purchased %s for $%i", pWeaponInfo->m_pName, pWeaponInfo->m_nPrice);
+	ClientPrint(player, HUD_PRINTTALK, CHAT_PREFIX "You received %s.", pWeaponInfo->m_pName);
 }
 
 void WeaponCommandCallback(const CCommandContext& context, const CCommand& args)
@@ -246,12 +139,12 @@ void RegisterWeaponCommands()
 	{
 		for (const auto& alias : aliases)
 		{
-			CChatCommand::Create(alias.c_str(), ParseWeaponCommand, "- Buys this weapon", ADMFLAG_NONE, CMDFLAG_NOHELP);
+			CChatCommand::Create(alias.c_str(), ParseWeaponCommand, "Get this weapon", ADMFLAG_NONE, CMDFLAG_NOHELP);
 
 			char cmdName[64];
 			V_snprintf(cmdName, sizeof(cmdName), "%s%s", COMMAND_PREFIX, alias.c_str());
 
-			new ConCommand(cmdName, WeaponCommandCallback, "Buys this weapon", FCVAR_RELEASE | FCVAR_CLIENT_CAN_EXECUTE | FCVAR_LINKED_CONCOMMAND);
+			new ConCommand(cmdName, WeaponCommandCallback, "Get this weapon", FCVAR_RELEASE | FCVAR_CLIENT_CAN_EXECUTE | FCVAR_LINKED_CONCOMMAND);
 		}
 	}
 }

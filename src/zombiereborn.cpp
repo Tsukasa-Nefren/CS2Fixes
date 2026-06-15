@@ -272,12 +272,7 @@ bool ZRClass::IsApplicableTo(CCSPlayerController* pController)
 
 void CZRPlayerClassManager::PrecacheModels(IEntityResourceManifest* pResourceManifest)
 {
-	for (const auto& pair : m_ZombieClassMap)
-		for (const auto& pModel : pair.second->vecModels)
-			pResourceManifest->AddResource(pModel->szModelPath.c_str());
-	for (const auto& pair : m_HumanClassMap)
-		for (const auto& pModel : pair.second->vecModels)
-			pResourceManifest->AddResource(pModel->szModelPath.c_str());
+	(void)pResourceManifest;
 }
 
 void CZRPlayerClassManager::LoadPlayerClass()
@@ -491,26 +486,12 @@ void CZRPlayerClassManager::ApplyBaseClass(std::shared_ptr<ZRClass> pClass, CCSP
 	ApplyBaseClassVisuals(pClass, pPawn);
 }
 
-// only changes that should not (directly) affect gameplay
+// Keep ZR class state without changing CS2's selected player model or skin.
 void CZRPlayerClassManager::ApplyBaseClassVisuals(std::shared_ptr<ZRClass> pClass, CCSPlayerPawn* pPawn)
 {
-	std::shared_ptr<ZRModelEntry> pModelEntry = pClass->GetRandomModelEntry();
-	Color clrRender;
-	V_StringToColor(pModelEntry->szColor.c_str(), clrRender);
-
-	pPawn->SetModel(pModelEntry->szModelPath.c_str());
-	pPawn->m_clrRender = clrRender;
-	pPawn->AcceptInput("Skin", pModelEntry->GetRandomSkin());
-
 	const auto pController = reinterpret_cast<CCSPlayerController*>(pPawn->GetController());
 	if (const auto pPlayer = pController != nullptr ? pController->GetZEPlayer() : nullptr)
-	{
 		pPlayer->SetActiveZRClass(pClass);
-		pPlayer->SetActiveZRModel(pModelEntry);
-	}
-
-	// This has to be done a bit later
-	UTIL_AddEntityIOEvent(pPawn, "SetScale", nullptr, nullptr, pClass->flScale);
 }
 
 std::shared_ptr<ZRHumanClass> CZRPlayerClassManager::GetHumanClass(const char* pszClassName)

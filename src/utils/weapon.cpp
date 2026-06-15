@@ -140,7 +140,7 @@ std::vector<std::pair<std::string, std::vector<std::string>>> GenerateWeaponComm
 
 	for (const auto& weapon : s_WeaponMap)
 	{
-		if (weapon.second.m_nPrice <= 0)
+		if (!weapon.second.m_pName || weapon.second.m_vecAliases.empty())
 			continue;
 
 		const auto& classname = weapon.first;
