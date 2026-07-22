@@ -47,6 +47,12 @@ public:
 	~CDetour()
 	{
 		FreeDetour();
+
+		// The constructor registers this detour into g_vecDetours, so it has to deregister here.
+		// Without this, deleting a detour (e.g. the CreateDetour failure path in
+		// SetupFireOutputInternalDetour) leaves a dangling pointer in g_vecDetours, which
+		// FlushAllDetours later dereferences on shutdown/map change -> use-after-free crash.
+		g_vecDetours.FindAndFastRemove(this);
 	}
 
 	bool CreateDetour(CGameConfig* gameConfig) override;
